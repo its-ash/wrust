@@ -1,14 +1,19 @@
-[package]
-name = "worust"
-version = "0.1.0"
+[workspace]
+members = ["shared", "wasm", "worker"]
+resolver = "2"
+
+[workspace.package]
 edition = "2021"
-authors = ["ashvinijangid <ashvinijangid@gmail.com>"]
+license = "MIT"
 
-[lib]
-crate-type = ["cdylib"]
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+sha2 = "0.10"
+hex = "0.4"
 
-[dependencies]
-worker = { version = "0.7", features = ['http', 'axum'] }
-worker-macros = { version = "0.7", features = ['http'] }
-axum = { version = "0.8", default-features = false }
-tower-service = "0.3.3"
+[profile.release]
+lto = true
+codegen-units = 1

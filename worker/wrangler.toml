@@ -1,0 +1,14 @@
+name = "wrust-signal-worker"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-04-08"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[[durable_objects.bindings]]
+name = "SESSION_DO"
+class_name = "SessionRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionRoom"]

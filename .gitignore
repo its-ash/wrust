@@ -1,3 +1,7 @@
 target
 node_modules
 .wrangler
+frontend/node_modules
+frontend/dist
+frontend/src/wasm_pkg
+*.log
