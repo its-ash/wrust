@@ -641,6 +641,27 @@ p {
   font-weight: 700;
 }
 
+.credit-bar {
+  padding: 10px 12px;
+  border-top: 2px solid var(--border);
+  background: #ffffff;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.credit-bar a {
+  color: var(--primary-blue);
+  text-decoration: none;
+}
+
+.credit-bar a:hover {
+  color: var(--primary-red);
+  text-decoration: underline;
+}
+
 @media (min-width: 900px) {
   .shell,
   .brand,

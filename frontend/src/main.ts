@@ -107,6 +107,11 @@ function render(): void {
 
       <section id="content" class="panel panel-${mode}"></section>
       <section class="status-bar" id="status-bar">Ready.</section>
+      <footer class="credit-bar">
+        <a href="https://its-ash.github.io/" target="_blank" rel="noopener noreferrer">
+          Made by Ashvini Jangid
+        </a>
+      </footer>
     </main>
   `;
 
