@@ -517,7 +517,7 @@ function collectResumeOffsets(sessionId: string): FileOffset[] {
   const offsets: FileOffset[] = [];
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
-    if (!key || !key.startsWith(`wrust:recv:${sessionId}:`)) {
+    if (!key || !key.startsWith(`ashare:recv:${sessionId}:`)) {
       continue;
     }
 

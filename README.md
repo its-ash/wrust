@@ -1,4 +1,4 @@
-# wrust
+# Ashare
 
 Production-grade browser P2P file sharing (AirDrop-style) with:
 
@@ -58,7 +58,7 @@ cargo check
 ### 3. Build WASM package for frontend
 
 ```bash
-wasm-pack build wasm --target web --out-dir ../frontend/src/wasm_pkg --out-name wrust_wasm
+wasm-pack build wasm --target web --out-dir ../frontend/src/wasm_pkg --out-name ashare_wasm
 ```
 
 ### 4. Run frontend
@@ -122,7 +122,7 @@ preview_id = "<preview_namespace_id>"
 cd frontend
 npm ci
 npm run build
-npx wrangler pages deploy dist --project-name wrust-frontend
+npx wrangler pages deploy dist --project-name ashare
 ```
 
 3. Deploy `frontend/dist` to Cloudflare Pages.

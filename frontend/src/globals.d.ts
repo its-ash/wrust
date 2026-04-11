@@ -1,4 +1,4 @@
-declare module "./wasm_pkg/wrust_wasm.js" {
+declare module "./wasm_pkg/ashare_wasm.js" {
   const init: () => Promise<void>;
   export default init;
   export function hash_bytes(bytes: Uint8Array): string;

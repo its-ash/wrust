@@ -3,7 +3,7 @@
 use blake3::Hasher;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use wrust_shared::{DataMessage, FileOffset};
+use ashare_shared::{DataMessage, FileOffset};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChunkHeader {

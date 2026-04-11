@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use worker::*;
-use wrust_shared::{
+use ashare_shared::{
     CreateSessionRequest, CreateSessionResponse, JoinSessionRequest, JoinSessionResponse, PeerRole,
     PresenceSession, SessionMetadata, SignalMessage, SESSION_TTL_SECS,
 };

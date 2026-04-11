@@ -1,5 +1,5 @@
 [package]
-name = "wrust-wasm"
+name = "ashare-wasm"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-wrust-shared = { path = "../shared" }
+ashare-shared = { path = "../shared" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 wasm-bindgen = "0.2"

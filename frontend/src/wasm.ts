@@ -1,5 +1,5 @@
 import type { DataMessage, FileOffset } from "./types";
-import initWasmModule, * as wasmModule from "./wasm_pkg/wrust_wasm.js";
+import initWasmModule, * as wasmModule from "./wasm_pkg/ashare_wasm.js";
 
 type WasmModule = {
   hash_bytes: (bytes: Uint8Array) => string;

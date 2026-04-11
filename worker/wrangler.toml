@@ -1,4 +1,4 @@
-name = "wrust-signal-worker"
+name = "ashare-signal-worker"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-04-08"
 

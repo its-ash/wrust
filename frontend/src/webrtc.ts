@@ -208,7 +208,7 @@ export class WebRtcMesh {
 
     if (createDataChannel) {
       // Use fully reliable ordered delivery for file transfer metadata/chunks.
-      const dc = pc.createDataChannel("wrust-transfer", {
+      const dc = pc.createDataChannel("ashare-transfer", {
         ordered: true
       });
       this.bindDataChannel(peerId, link, dc);
@@ -281,7 +281,7 @@ export class WebRtcMesh {
 
     if (data.type === "ack") {
       localStorage.setItem(
-        `wrust:recv:${this.sessionId}:${data.file_id}`,
+        `ashare:recv:${this.sessionId}:${data.file_id}`,
         JSON.stringify({ file_id: data.file_id, chunk_index: data.chunk_index })
       );
     }

@@ -1,4 +1,4 @@
-//! Shared protocol definitions for wrust.
+//! Shared protocol definitions for Ashare.
 
 use serde::{Deserialize, Serialize};
 
