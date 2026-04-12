@@ -1,4 +1,4 @@
-import { flattenTree, formatBytes, pickFolderTree } from "./file-system";
+import { flattenTree, formatBytes, pickFilesTree, pickFolderTree } from "./file-system";
 import { SignalingClient } from "./signaling";
 import type { FileNode, FileOffset, SignalMessage } from "./types";
 import { initWasm } from "./wasm";
@@ -153,7 +153,7 @@ function sendHtml(): string {
     ? `Scanning... ${senderState.scanFileCount} files • ${formatBytes(senderState.scanTotalSize)}`
     : senderState.fileCount > 0
       ? `${senderState.fileCount} files • ${formatBytes(senderState.totalSize)}`
-      : "No folder selected";
+      : "No files or folder selected";
 
   return `
     <div class="stack">
@@ -161,6 +161,7 @@ function sendHtml(): string {
 
       <div class="button-row">
         <button id="pick-folder" ${senderState.scanning ? "disabled" : ""}>${senderState.scanning ? "Scanning..." : "Pick Folder"}</button>
+        <button id="pick-files" ${senderState.scanning ? "disabled" : ""}>${senderState.scanning ? "Scanning..." : "Pick Files"}</button>
         <button id="create-session" ${senderState.fileCount === 0 || senderState.scanning ? "disabled" : ""}>Start Server</button>
       </div>
 
@@ -204,6 +205,7 @@ function receiveHtml(): string {
 
 function bindSendHandlers(): void {
   const pickFolder = document.querySelector<HTMLButtonElement>("#pick-folder");
+  const pickFiles = document.querySelector<HTMLButtonElement>("#pick-files");
   const createSession = document.querySelector<HTMLButtonElement>("#create-session");
 
   if (pickFolder) {
@@ -236,10 +238,42 @@ function bindSendHandlers(): void {
     };
   }
 
+  if (pickFiles) {
+    pickFiles.onclick = async () => {
+      try {
+        senderState.scanning = true;
+        senderState.scanFileCount = senderState.fileCount;
+        senderState.scanTotalSize = senderState.totalSize;
+        render();
+
+        const scan = await pickFilesTree((progress) => {
+          senderState.scanFileCount = senderState.fileCount + progress.fileCount;
+          senderState.scanTotalSize = senderState.totalSize + progress.totalSize;
+          if (mode === "send") {
+            render();
+          }
+        });
+        senderState.tree = [...senderState.tree, ...scan.tree];
+        senderState.flatFiles = [...senderState.flatFiles, ...scan.flatFiles];
+        senderState.totalSize += scan.totalSize;
+        senderState.fileCount += scan.fileCount;
+        senderState.scanning = false;
+        render();
+        setStatus(
+          `Added ${scan.fileCount} files (${formatBytes(scan.totalSize)}). Total: ${senderState.fileCount} files, ${formatBytes(senderState.totalSize)}.`
+        );
+      } catch (error) {
+        senderState.scanning = false;
+        render();
+        setStatus(`File selection failed: ${(error as Error).message}`);
+      }
+    };
+  }
+
   if (createSession) {
     createSession.onclick = async () => {
       if (senderState.fileCount === 0) {
-        setStatus("Pick a folder first.");
+        setStatus("Pick files or a folder first.");
         return;
       }
 

@@ -45,6 +45,46 @@ export async function pickFolderTree(onProgress?: (progress: ScanProgress) => vo
   };
 }
 
+export async function pickFilesTree(onProgress?: (progress: ScanProgress) => void): Promise<FileScanResult> {
+  const selected = await pickFilesFromInput();
+  const tree: FileNode[] = [];
+  const flatFiles: FileNode[] = [];
+  let totalSize = 0;
+  let fileCount = 0;
+
+  for (let index = 0; index < selected.length; index += 1) {
+    const file = selected[index];
+    const relativePath = getFilePath(file);
+    const path = relativePath || `Selected Files/${file.name}`;
+    const id = `file:${path}:${file.size}:${file.lastModified}:${index}`;
+    const hash = await smallHash(file);
+    fileCount += 1;
+    totalSize += file.size;
+    onProgress?.({ fileCount, totalSize });
+
+    const node: FileNode = {
+      id,
+      name: file.name,
+      path,
+      mime: file.type || "application/octet-stream",
+      size: file.size,
+      hash,
+      children: [],
+      is_dir: false,
+      file
+    };
+    tree.push(node);
+    flatFiles.push(node);
+  }
+
+  return {
+    tree,
+    fileCount,
+    totalSize,
+    flatFiles
+  };
+}
+
 async function walkEntry(
   entry: FileSystemHandle,
   parentPath: string,
@@ -107,6 +147,69 @@ async function smallHash(file: File): Promise<string> {
   const sample = file.slice(0, Math.min(file.size, 64 * 1024));
   const buffer = await sample.arrayBuffer();
   return hashBytes(new Uint8Array(buffer));
+}
+
+function getFilePath(file: File): string {
+  const withRelative = file as File & { webkitRelativePath?: string };
+  if (withRelative.webkitRelativePath && withRelative.webkitRelativePath.length > 0) {
+    return withRelative.webkitRelativePath;
+  }
+  return file.name;
+}
+
+async function pickFilesFromInput(): Promise<File[]> {
+  return await new Promise<File[]>((resolve, reject) => {
+    const input = document.createElement("input");
+    let settled = false;
+    input.type = "file";
+    input.multiple = true;
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    input.style.top = "-9999px";
+
+    const cleanup = (): void => {
+      window.removeEventListener("focus", onWindowFocus);
+      input.remove();
+    };
+
+    const finalize = (result: File[] | Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      if (result instanceof Error) {
+        reject(result);
+        return;
+      }
+      resolve(result);
+    };
+
+    const onWindowFocus = (): void => {
+      window.setTimeout(() => {
+        if (!settled) {
+          finalize(new Error("No files selected."));
+        }
+      }, 0);
+    };
+
+    input.addEventListener("change", () => {
+      const picked = Array.from(input.files ?? []);
+      if (picked.length === 0) {
+        finalize(new Error("No files selected."));
+        return;
+      }
+      finalize(picked);
+    });
+
+    input.addEventListener("cancel", () => {
+      finalize(new Error("File selection cancelled."));
+    });
+
+    window.addEventListener("focus", onWindowFocus, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
 }
 
 export function flattenTree(tree: FileNode[]): FileNode[] {
