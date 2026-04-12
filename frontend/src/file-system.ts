@@ -190,7 +190,7 @@ async function pickFilesFromInput(): Promise<File[]> {
         if (!settled) {
           finalize(new Error("No files selected."));
         }
-      }, 0);
+      }, 300);
     };
 
     input.addEventListener("change", () => {
