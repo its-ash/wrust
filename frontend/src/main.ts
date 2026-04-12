@@ -35,6 +35,7 @@ type ReceiverState = {
     saved: boolean;
     requested: boolean;
     url?: string;
+    _openPlayerOnReady?: boolean;
   }>;
 };
 
@@ -100,10 +101,11 @@ function render(): void {
         <p>Browser-native global P2P sharing powered by WebRTC and Rust/WASM.</p>
       </header>
 
+      ${!senderState.sessionId && !receiverState.connected && receiverState.sharedFiles.length === 0 ? `
       <section class="mode-switch">
         <button data-mode="send" class="mode-btn ${mode === "send" ? "active" : ""}">Send</button>
         <button data-mode="receive" class="mode-btn ${mode === "receive" ? "active" : ""}">Receive</button>
-      </section>
+      </section>` : ""}
 
       <section id="content" class="panel panel-${mode}"></section>
       <section class="status-bar" id="status-bar">Ready.</section>
@@ -146,9 +148,29 @@ function bindModeHandlers(): void {
   }
 
   bindReceiveHandlers();
+  bindVideoPreviewHandlers();
 }
 
 function sendHtml(): string {
+  // If a session is already running, only show Stop Server.
+  if (senderState.sessionId) {
+    const scanningMeta =
+      senderState.fileCount > 0
+        ? `${senderState.fileCount} files • ${formatBytes(senderState.totalSize)}`
+        : "";
+    return `
+      <div class="stack">
+        <h2>Send Files</h2>
+        <div class="button-row">
+          <button id="stop-server" class="btn-danger">Stop Server</button>
+        </div>
+        <div class="meta">${scanningMeta}</div>
+        <div class="code">Code: <strong>${senderState.sessionId}</strong></div>
+        <small>Share this code with the receiver.</small>
+      </div>
+    `;
+  }
+
   const scanningMeta = senderState.scanning
     ? `Scanning... ${senderState.scanFileCount} files • ${formatBytes(senderState.scanTotalSize)}`
     : senderState.fileCount > 0
@@ -174,8 +196,10 @@ function sendHtml(): string {
 }
 
 function receiveHtml(): string {
-  if (receiverState.connected) {
-    const files = flattenTree(receiverState.sharedTree);
+  const files = flattenTree(receiverState.sharedTree);
+
+  // Show the file grid if connected OR if we already have files (e.g. sender disconnected after transfer).
+  if (receiverState.connected || files.length > 0) {
     return `
       <div class="explorer-page">
         <div id="receiver-progress" class="meta explorer-progress"></div>
@@ -204,6 +228,20 @@ function receiveHtml(): string {
 }
 
 function bindSendHandlers(): void {
+  const stopServer = document.querySelector<HTMLButtonElement>("#stop-server");
+  if (stopServer) {
+    stopServer.onclick = () => {
+      senderState.mesh?.closeAll();
+      signaling.disconnect();
+      senderState.sessionId = undefined;
+      senderState.mesh = undefined;
+      senderState.senderPeerId = undefined;
+      render();
+      setStatus("Server stopped.");
+    };
+    return;
+  }
+
   const pickFolder = document.querySelector<HTMLButtonElement>("#pick-folder");
   const pickFiles = document.querySelector<HTMLButtonElement>("#pick-files");
   const createSession = document.querySelector<HTMLButtonElement>("#create-session");
@@ -290,7 +328,7 @@ function bindSendHandlers(): void {
         const wsUrl = `${created.ws_url}?role=sender&peer_id=${encodeURIComponent(senderPeerId)}`;
         signaling.connect(wsUrl);
 
-        renderSendSessionOutput(created.session_id, created.expires_in);
+        render(); // switches to Stop Server view
         setStatus("Session created. Waiting for receivers.");
       } catch (error) {
         setStatus(`Session creation failed: ${(error as Error).message}`);
@@ -331,6 +369,160 @@ function bindReceiveHandlers(): void {
       render();
       setStatus(`Downloading: ${state.name}`);
     };
+  });
+
+  const cancelButtons = document.querySelectorAll<HTMLButtonElement>("button[data-cancel-file]");
+  cancelButtons.forEach((button) => {
+    button.onclick = () => {
+      const fileId = button.dataset.cancelFile;
+      if (!fileId || !receiverState.mesh) {
+        return;
+      }
+      const state = receiverState.sharedFiles.find((item) => item.id === fileId);
+      if (!state) {
+        return;
+      }
+      receiverState.mesh.cancelFile(fileId);
+      state.requested = false;
+      render();
+      setStatus(`Cancelled: ${state.name}`);
+    };
+  });
+}
+
+function bindVideoPreviewHandlers(): void {
+  // ── "▶ Play" on already-downloaded video → open modal ──────────────────────
+  document.querySelectorAll<HTMLButtonElement>("button[data-open-player]").forEach((button) => {
+    button.onclick = () => {
+      const fileId = button.dataset.openPlayer;
+      if (!fileId) {
+        return;
+      }
+      const state = receiverState.sharedFiles.find((item) => item.id === fileId);
+      if (!state?.url) {
+        return;
+      }
+      openVideoModal(state.name, state.url, state.mime);
+    };
+  });
+
+  // ── "▶ Play" on undownloaded video → request file, then open modal when ready ──
+  document.querySelectorAll<HTMLButtonElement>("button[data-request-file]").forEach((button) => {
+    const fileId = button.dataset.requestFile;
+    if (!fileId) {
+      return;
+    }
+    const state = receiverState.sharedFiles.find((item) => item.id === fileId);
+    const isVid = state ? isVideo(state.mime, state.name) : false;
+    button.onclick = () => {
+      if (!fileId || !receiverState.mesh) {
+        return;
+      }
+      const s = receiverState.sharedFiles.find((item) => item.id === fileId);
+      if (!s || s.saved) {
+        return;
+      }
+      const sent = receiverState.mesh.requestFile(fileId);
+      if (!sent) {
+        setStatus("Unable to request file right now.");
+        return;
+      }
+      s.requested = true;
+      if (isVid) {
+        s._openPlayerOnReady = true;
+      }
+      render();
+      setStatus(`Downloading: ${s.name}`);
+    };
+  });
+
+  // ── "↓ Download" on undownloaded video → request file only, no modal ────────
+  document.querySelectorAll<HTMLButtonElement>("button[data-request-file-download]").forEach((button) => {
+    button.onclick = () => {
+      const fileId = button.dataset.requestFileDownload;
+      if (!fileId || !receiverState.mesh) {
+        return;
+      }
+      const state = receiverState.sharedFiles.find((item) => item.id === fileId);
+      if (!state || state.saved) {
+        return;
+      }
+      const sent = receiverState.mesh.requestFile(fileId);
+      if (!sent) {
+        setStatus("Unable to request file right now.");
+        return;
+      }
+      state.requested = true;
+      render();
+      setStatus(`Downloading: ${state.name}`);
+    };
+  });
+}
+
+function openVideoModal(name: string, url: string, mime: string): void {
+  // Remove any existing modal first.
+  document.getElementById("video-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "video-modal";
+  modal.className = "video-modal-overlay";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("aria-label", name);
+
+  modal.innerHTML = `
+    <div class="video-modal-box">
+      <div class="video-modal-header">
+        <span class="video-modal-title">${name}</span>
+        <button class="video-modal-close" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="video-modal-body">
+        <video
+          class="video-modal-player"
+          controls
+          playsinline
+          preload="auto"
+        >
+          <source src="${url}" type="${mime}">
+        </video>
+      </div>
+      <div class="video-modal-footer">
+        <a href="${url}" download="${name}" class="tree-download-btn">&#8595; Download</a>
+      </div>
+    </div>
+  `;
+
+  const close = (): void => {
+    const vid = modal.querySelector<HTMLVideoElement>("video");
+    if (vid) {
+      vid.pause();
+      vid.src = "";
+    }
+    modal.remove();
+    document.removeEventListener("keydown", onKey);
+  };
+
+  const onKey = (e: KeyboardEvent): void => {
+    if (e.key === "Escape") {
+      close();
+    }
+  };
+
+  modal.querySelector<HTMLButtonElement>(".video-modal-close")!.onclick = close;
+  // Click on backdrop closes modal.
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      close();
+    }
+  };
+  document.addEventListener("keydown", onKey);
+
+  document.body.appendChild(modal);
+
+  // Auto-play after insert.
+  const vid = modal.querySelector<HTMLVideoElement>("video")!;
+  void vid.play().catch(() => {
+    // Fine – play will succeed on user gesture.
   });
 }
 
@@ -478,35 +670,49 @@ function bindMeshEvents(mesh: WebRtcMesh, isSender: boolean): void {
   };
 
   mesh.onFileReady = (id, name, blob, path) => {
+    // Determine the correct MIME without re-wrapping the blob (re-wrapping copies the entire
+    // buffer and can silently OOM for large files like a 670 MB video).
+    const resolvedMime = resolveMime(blob.type, name);
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = name;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+
+    if (!isVideo(resolvedMime, name)) {
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = name;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
 
     const existing = receiverState.sharedFiles.find((item) => item.id === id);
     if (existing) {
       existing.saved = true;
       existing.requested = false;
-      existing.mime = blob.type || existing.mime;
+      existing.mime = resolvedMime;
+      existing.url = url;
     } else {
       receiverState.sharedFiles.unshift({
         id,
         name,
         path,
         size: blob.size,
-        mime: blob.type || "application/octet-stream",
+        mime: resolvedMime,
         saved: true,
-        requested: false
+        requested: false,
+        url
       });
     }
     mode = "receive";
     render();
-    setStatus(`Saved: ${name}`);
+    setStatus(`Ready: ${name}`);
+
+    // If the user clicked "▶ Play" to trigger the download, open the modal now.
+    const entry = receiverState.sharedFiles.find((item) => item.id === id);
+    if (entry?._openPlayerOnReady && entry.url) {
+      entry._openPlayerOnReady = false;
+      openVideoModal(entry.name, entry.url, entry.mime);
+    }
   };
 
   mesh.onFileSaved = (id, name) => {
@@ -585,6 +791,8 @@ function renderFileGrid(files: FileNode[]): string {
             const state = receiverState.sharedFiles.find((item) => item.id === node.id);
             const isSaved = Boolean(state?.saved);
             const isRequested = Boolean(state?.requested);
+            const mime = state?.mime ?? node.mime;
+            const url = state?.url;
             return `
               <article class="file-card">
                 <h4>${node.name}</h4>
@@ -593,8 +801,19 @@ function renderFileGrid(files: FileNode[]): string {
                 <div class="tree-actions">
                   ${
                     isSaved
-                      ? `<span class="tree-saved-tag">Saved</span>`
-                      : `<button data-request-file="${node.id}" class="tree-download-btn">${isRequested ? "Downloading..." : "Download"}</button>`
+                      ? isVideo(mime, node.name) && url
+                        ? `<button type="button" class="tree-download-btn tree-play-btn" data-open-player="${node.id}">&#9654; Play</button>
+                           <a href="${url}" download="${node.name}" class="tree-download-btn">&#8595; Download</a>`
+                        : url
+                          ? `<a href="${url}" download="${node.name}" class="tree-download-btn">&#8595; Download</a>`
+                          : `<span class="tree-saved-tag">Saved</span>`
+                      : isRequested
+                        ? `<span class="tree-saved-tag">Downloading...</span>
+                           <button data-cancel-file="${node.id}" class="tree-cancel-btn">Stop</button>`
+                        : isVideo(mime, node.name)
+                          ? `<button data-request-file="${node.id}" class="tree-download-btn tree-play-btn">&#9654; Play</button>
+                             <button data-request-file-download="${node.id}" class="tree-download-btn">&#8595; Download</button>`
+                          : `<button data-request-file="${node.id}" class="tree-download-btn">&#8595; Download</button>`
                   }
                 </div>
               </article>
@@ -604,6 +823,36 @@ function renderFileGrid(files: FileNode[]): string {
       </div>
     </div>
   `;
+}
+
+function isVideo(mime: string, name?: string): boolean {
+  if (mime.startsWith("video/")) {
+    return true;
+  }
+  if (name) {
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    return ["mp4", "webm", "ogg", "ogv", "mov", "m4v", "mkv", "avi"].includes(ext);
+  }
+  return false;
+}
+
+const MIME_BY_EXT: Record<string, string> = {
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  ogg: "video/ogg",
+  ogv: "video/ogg",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo"
+};
+
+function resolveMime(blobType: string, name: string): string {
+  if (blobType && blobType !== "application/octet-stream") {
+    return blobType;
+  }
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_BY_EXT[ext] ?? (blobType || "application/octet-stream");
 }
 
 function setStatus(text: string): void {

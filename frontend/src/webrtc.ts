@@ -40,8 +40,8 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const STATS_EMIT_INTERVAL_MS = 150;
-const DC_BUFFERED_HIGH_WATER = 16 * 1024 * 1024;
-const DC_BUFFERED_LOW_WATER = 4 * 1024 * 1024;
+const DC_BUFFERED_HIGH_WATER = 256 * 1024;
+const DC_BUFFERED_LOW_WATER = 64 * 1024;
 
 export class WebRtcMesh {
   private readonly links = new Map<string, PeerLink>();
@@ -53,6 +53,7 @@ export class WebRtcMesh {
   private readonly receiverStates = new Map<string, ReceiverFileState>();
   private readonly savedOffsets = new Map<string, number>();
   private readonly receiveSinks = new Map<string, FileSink>();
+  private readonly cancelledFiles = new Set<string>();
 
   onPeerConnected: (peerId: string) => void = () => {};
   onPeerDisconnected: (peerId: string) => void = () => {};
@@ -153,6 +154,18 @@ export class WebRtcMesh {
       }
     }
     return sent;
+  }
+
+  cancelFile(fileId: string): void {
+    this.cancelledFiles.add(fileId);
+    this.receiverStates.delete(fileId);
+    const payload: DataMessage = { type: "cancel_file", file_id: fileId };
+    const serialized = JSON.stringify(payload);
+    for (const link of this.links.values()) {
+      if (link.dc && link.dc.readyState === "open") {
+        void safeSend(link.dc, serialized);
+      }
+    }
   }
 
   setReceiveSink(fileId: string, sink: FileSink): void {
@@ -275,7 +288,12 @@ export class WebRtcMesh {
       }
     }
 
+    if (data.type === "cancel_file" && this.localRole === "sender") {
+      this.cancelledFiles.add(data.file_id);
+    }
+
     if (data.type === "request_file" && this.localRole === "sender") {
+      this.cancelledFiles.delete(data.file_id);
       void this.sendRequestedFile(peerId, data.file_id);
     }
 
@@ -451,14 +469,21 @@ export class WebRtcMesh {
       hash: fileNode.hash
     };
 
-    dc.send(encodeMetadataPacket(metadata));
+    await safeSend(dc, encodeMetadataPacket(metadata));
 
     const resumeKey = `${peerId}:${fileNode.id}`;
     const startChunk = this.savedOffsets.get(resumeKey) ?? 0;
 
     for (let chunkIndex = startChunk; chunkIndex < totalChunks; chunkIndex += 1) {
+      if (this.cancelledFiles.has(fileId)) {
+        this.cancelledFiles.delete(fileId);
+        return;
+      }
       if (dc.bufferedAmount > DC_BUFFERED_HIGH_WATER) {
         await waitForBufferedAmountLow(dc, DC_BUFFERED_LOW_WATER);
+      }
+      if (dc.readyState !== "open") {
+        return;
       }
 
       const start = chunkIndex * chunkSize;
@@ -467,14 +492,17 @@ export class WebRtcMesh {
       const bytes = new Uint8Array(await slice.arrayBuffer());
       const packet = encodeChunkPacket(fileNode.id, chunkIndex, start, bytes);
 
-      dc.send(packet);
+      await safeSend(dc, packet);
+      if (dc.readyState !== "open") {
+        return;
+      }
 
       link.sentBytes += bytes.length;
       this.emitStats(peerId, false);
     }
 
     const done: DataMessage = { type: "file_done", file_id: fileNode.id };
-    dc.send(JSON.stringify(done));
+    await safeSend(dc, JSON.stringify(done));
     this.emitStats(peerId, true);
   }
 }
@@ -487,8 +515,32 @@ function waitForBufferedAmountLow(dc: RTCDataChannel, lowWater: number): Promise
   return new Promise((resolve) => {
     const onLow = (): void => {
       dc.removeEventListener("bufferedamountlow", onLow);
+      dc.removeEventListener("close", onLow);
+      dc.removeEventListener("error", onLow);
       resolve();
     };
     dc.addEventListener("bufferedamountlow", onLow, { once: true });
+    dc.addEventListener("close", onLow, { once: true });
+    dc.addEventListener("error", onLow, { once: true });
   });
+}
+
+async function safeSend(dc: RTCDataChannel, data: string | ArrayBuffer | Uint8Array): Promise<void> {
+  const MAX_RETRIES = 8;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (dc.readyState !== "open") {
+      return;
+    }
+    try {
+      dc.send(data as string);
+      return;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "OperationError") {
+        // Internal send buffer full — drain before retrying.
+        await waitForBufferedAmountLow(dc, DC_BUFFERED_LOW_WATER);
+      } else {
+        throw err;
+      }
+    }
+  }
 }

@@ -512,7 +512,11 @@ p {
 .tree-actions {
   flex-shrink: 0;
   display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
   justify-content: flex-start;
+  margin-top: 4px;
 }
 
 .tree-download-btn,
@@ -535,6 +539,12 @@ p {
   border-color: var(--border);
 }
 
+.tree-play-btn {
+  background: var(--primary-blue);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
 .tree-saved-tag {
   border: 2px solid var(--border);
   background: var(--primary-yellow);
@@ -545,6 +555,135 @@ p {
   letter-spacing: 0.06em;
   font-weight: 700;
 }
+
+.tree-cancel-btn {
+  border: 2px solid var(--border);
+  background: var(--primary-red);
+  color: #ffffff;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 0 var(--border);
+  border-radius: 0;
+  font-family: inherit;
+}
+
+.tree-cancel-btn:hover {
+  transform: translateY(-1px);
+  background: #a01010;
+}
+
+.btn-danger {
+  border: 2px solid var(--border);
+  background: var(--primary-red);
+  color: #ffffff;
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 0 var(--border);
+  border-radius: 0;
+  font-family: inherit;
+  font-weight: 700;
+}
+
+.btn-danger:hover {
+  transform: translateY(-1px);
+  background: #a01010;
+}
+
+/* ── Video modal ─────────────────────────────────────────────────────────── */
+
+.video-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.video-modal-box {
+  background: #ffffff;
+  border: 2px solid var(--border);
+  box-shadow: 8px 8px 0 0 var(--border);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: min(96vw, 960px);
+  max-height: 92vh;
+  overflow: hidden;
+}
+
+.video-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 2px solid var(--border);
+  background: var(--foreground);
+  color: #ffffff;
+  gap: 12px;
+}
+
+.video-modal-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-modal-close {
+  flex-shrink: 0;
+  border: 2px solid #ffffff;
+  background: transparent;
+  color: #ffffff;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 0.9rem;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.video-modal-close:hover {
+  background: var(--primary-red);
+  border-color: var(--primary-red);
+  transform: none;
+}
+
+.video-modal-body {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.video-modal-player {
+  width: 100%;
+  max-height: calc(92vh - 120px);
+  display: block;
+  object-fit: contain;
+}
+
+.video-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 2px solid var(--border);
+  background: #f8f8f8;
+}
+
+/* ── Card action row ─────────────────────────────────────────────────────── */
 
 .peer-card,
 .download-card,

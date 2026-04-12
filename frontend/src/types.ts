@@ -74,6 +74,7 @@ export type DataMessage =
   | { type: "transfer_done" }
   | { type: "ack"; file_id: string; chunk_index: number }
   | { type: "request_file"; file_id: string }
+  | { type: "cancel_file"; file_id: string }
   | { type: "resume_request"; offsets: FileOffset[] };
 
 export interface TransferStats {
